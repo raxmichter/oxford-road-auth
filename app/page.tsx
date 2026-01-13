@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { SocialLoginButtons } from "@/components/social-login-buttons"
 
 export default function LoginPage() {
@@ -14,7 +15,9 @@ export default function LoginPage() {
           <p className="text-white/70 text-lg font-light">Connect your accounts to get started</p>
         </div>
 
-        <SocialLoginButtons />
+        <Suspense fallback={<div className="text-white">Loading...</div>}>
+          <SocialLoginButtons />
+        </Suspense>
       </div>
     </main>
   )
