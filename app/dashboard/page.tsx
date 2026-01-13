@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { getLinkedAccounts } from "@/lib/auth/account-linking"
 import { ConnectedAccountsCard } from "@/components/dashboard/connected-accounts-card"
 
 export default async function DashboardPage() {
-  const session = await auth()
+  const session = await getServerSession(authOptions)
 
   if (!session?.user) {
     redirect("/?callbackUrl=/dashboard")
