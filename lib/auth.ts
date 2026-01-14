@@ -6,6 +6,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "@/lib/prisma"
 import TikTokProvider from "@/lib/auth/providers/tiktok"
 import InstagramProvider from "@/lib/auth/providers/instagram"
+import { refreshAccessToken } from "@/lib/auth/token-refresh"
 
 const providers = []
 
@@ -104,6 +105,29 @@ export const authOptions = {
   },
   events: {
     async linkAccount({ account }) {
+      // Exchange short-lived tokens for long-lived tokens where applicable
+      let updatedTokens: {
+        access_token?: string
+        refresh_token?: string
+        expires_at?: number
+      } = {}
+
+      // Facebook and Instagram: exchange for long-lived tokens
+      if (account.provider === "facebook" || account.provider === "instagram") {
+        const refreshed = await refreshAccessToken(
+          account.provider,
+          account.access_token!,
+          account.refresh_token
+        )
+        if (refreshed) {
+          updatedTokens = {
+            access_token: refreshed.access_token,
+            refresh_token: refreshed.refresh_token,
+            expires_at: refreshed.expires_at,
+          }
+        }
+      }
+
       await prisma.account.update({
         where: {
           provider_providerAccountId: {
@@ -113,6 +137,7 @@ export const authOptions = {
         },
         data: {
           lastSyncedAt: new Date(),
+          ...updatedTokens,
         },
       })
     },
