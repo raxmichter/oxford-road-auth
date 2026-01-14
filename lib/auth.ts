@@ -2,8 +2,8 @@ import NextAuth from "next-auth"
 import FacebookProvider from "next-auth/providers/facebook"
 import TwitterProvider from "next-auth/providers/twitter"
 import GoogleProvider from "next-auth/providers/google"
-// import { PrismaAdapter } from "@auth/prisma-adapter"
-// import { prisma } from "@/lib/prisma"
+import { PrismaAdapter } from "@auth/prisma-adapter"
+import { prisma } from "@/lib/prisma"
 import TikTokProvider from "@/lib/auth/providers/tiktok"
 import InstagramProvider from "@/lib/auth/providers/instagram"
 
@@ -74,8 +74,7 @@ if (process.env.INSTAGRAM_CLIENT_ID && process.env.INSTAGRAM_CLIENT_SECRET) {
 }
 
 export const authOptions = {
-  // Temporarily disable adapter until database is configured
-  // adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(prisma),
   providers,
   session: {
     strategy: "jwt" as const,
@@ -103,22 +102,21 @@ export const authOptions = {
       return session
     },
   },
-  // Temporarily disable events until database is configured
-  // events: {
-  //   async linkAccount({ account, user }) {
-  //     await prisma.account.update({
-  //       where: {
-  //         provider_providerAccountId: {
-  //           provider: account.provider,
-  //           providerAccountId: account.providerAccountId,
-  //         },
-  //       },
-  //       data: {
-  //         lastSyncedAt: new Date(),
-  //       },
-  //     })
-  //   },
-  // },
+  events: {
+    async linkAccount({ account }) {
+      await prisma.account.update({
+        where: {
+          provider_providerAccountId: {
+            provider: account.provider,
+            providerAccountId: account.providerAccountId,
+          },
+        },
+        data: {
+          lastSyncedAt: new Date(),
+        },
+      })
+    },
+  },
   debug: process.env.NODE_ENV === "development",
 }
 
