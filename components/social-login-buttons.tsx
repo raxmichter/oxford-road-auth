@@ -105,7 +105,7 @@ export function SocialLoginButtons({
           className="w-full h-14 bg-zinc-800 hover:bg-zinc-700 text-white border-0 rounded-xl text-base font-medium gap-3 shadow-lg shadow-zinc-900/50 transition-all duration-200 hover:scale-[1.02] hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <TwitterIcon className="size-5" />
-          {isConnected("twitter") ? "X Connected" : mode === "link" ? "Connect X" : "X"}
+          {isConnected("twitter") ? "Connected" : mode === "link" ? "Connect" : ""}
         </Button>
 
         <Button
