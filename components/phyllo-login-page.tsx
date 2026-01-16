@@ -49,14 +49,27 @@ export function PhylloLoginPage() {
   }, [status])
 
   const handleAccountConnected = useCallback(
-    (accountId: string, workPlatformId: string, userId: string) => {
+    async (accountId: string, workPlatformId: string, userId: string) => {
       console.log("Account connected:", { accountId, workPlatformId, userId })
       // Add to connected platforms
       setConnectedPlatforms((prev) => [...new Set([...prev, workPlatformId])])
 
-      // Optionally redirect to dashboard after first connection
       const platformName = PLATFORM_ID_TO_NAME[workPlatformId]
       console.log(`${platformName} account connected successfully!`)
+
+      // Trigger sync to fetch and store account data in database
+      try {
+        console.log("Syncing account data to database...")
+        const syncResponse = await fetch("/api/phyllo/sync", { method: "POST" })
+        if (syncResponse.ok) {
+          const syncData = await syncResponse.json()
+          console.log("Sync completed:", syncData)
+        } else {
+          console.error("Sync failed:", await syncResponse.text())
+        }
+      } catch (error) {
+        console.error("Failed to sync account data:", error)
+      }
     },
     []
   )
