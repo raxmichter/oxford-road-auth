@@ -1,5 +1,5 @@
 // This is your Prisma schema file
-// For NextAuth.js + Multi-Account OAuth
+// For NextAuth.js + Multi-Account OAuth + Phyllo Integration
 
 generator client {
   provider = "prisma-client-js"
@@ -20,10 +20,17 @@ model User {
 
   // Phyllo integration
   phylloUserId  String?   @unique
+  phylloExternalId String? @unique
 
-  accounts Account[]
-  sessions Session[]
-  posts    Post[]
+  accounts         Account[]
+  sessions         Session[]
+  posts            Post[]
+  phylloAccounts   PhylloAccount[]
+  phylloProfiles   PhylloProfile[]
+  phylloContents   PhylloContent[]
+  phylloTransactions PhylloTransaction[]
+  phylloPayouts    PhylloPayout[]
+  phylloBalances   PhylloBalance[]
 }
 
 model Account {
@@ -111,4 +118,457 @@ model Post {
   @@index([userId])
   @@index([accountId])
   @@index([publishedAt])
+}
+
+// =============================================================================
+// PHYLLO INTEGRATION TABLES
+// =============================================================================
+
+// Phyllo Account - Represents connected social media accounts via Phyllo
+// Webhook events: ACCOUNTS.CONNECTED, ACCOUNTS.DISCONNECTED
+model PhylloAccount {
+  id                String   @id // Phyllo account ID
+  userId            String   // Our internal user ID
+  phylloUserId      String   // Phyllo's user ID
+
+  // Work Platform info
+  workPlatformId    String
+  workPlatformName  String
+  workPlatformLogoUrl String?
+
+  // Account details
+  platformUsername  String?
+  platformProfileId String?
+  platformProfileName String?
+  profilePicUrl     String?
+
+  // Status: CONNECTED, NOT_CONNECTED, SESSION_EXPIRED
+  status            String   @default("CONNECTED")
+
+  // Data sync status (from Phyllo API response)
+  identityStatus    String?
+  identityLastSyncAt DateTime?
+  engagementStatus  String?
+  engagementLastSyncAt DateTime?
+  incomeStatus      String?
+  incomeLastSyncAt  DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profiles          PhylloProfile[]
+  contents          PhylloContent[]
+  contentGroups     PhylloContentGroup[]
+  transactions      PhylloTransaction[]
+  payouts           PhylloPayout[]
+  balances          PhylloBalance[]
+
+  @@index([userId])
+  @@index([phylloUserId])
+  @@index([workPlatformId])
+  @@index([status])
+}
+
+// Phyllo Profile - Identity data for connected accounts
+// Webhook events: PROFILES.ADDED, PROFILES.UPDATED
+model PhylloProfile {
+  id                String   @id // Phyllo profile ID
+  userId            String
+  accountId         String   // Phyllo account ID
+
+  // Work Platform info
+  workPlatformId    String
+  workPlatformName  String
+
+  // Profile details
+  platformUsername  String?
+  fullName          String?
+  firstName         String?
+  lastName          String?
+  nickname          String?
+  url               String?
+  imageUrl          String?
+  introduction      String?  @db.Text
+
+  // Verification & account type
+  isVerified        Boolean  @default(false)
+  isBusiness        Boolean  @default(false)
+
+  // Reputation/Stats (audience metrics)
+  followerCount     BigInt?
+  followingCount    BigInt?
+  subscriberCount   BigInt?
+  contentCount      BigInt?
+
+  // Contact info
+  emails            Json?    // Array of email objects
+  phoneNumbers      Json?    // Array of phone objects
+
+  // Address
+  city              String?
+  country           String?
+  countryCode       String?
+  state             String?
+
+  // Demographics
+  dateOfBirth       DateTime?
+  gender            String?
+
+  // External IDs
+  externalId        String?
+
+  // Category/niche
+  category          String?
+
+  // Engagement rate
+  engagementRate    Float?
+
+  // Raw data from Phyllo API
+  rawData           Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account           PhylloAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([workPlatformId])
+}
+
+// Phyllo Content - Posts, videos, stories, etc.
+// Webhook events: CONTENTS.ADDED, CONTENTS.UPDATED
+model PhylloContent {
+  id                String   @id // Phyllo content ID
+  userId            String
+  accountId         String   // Phyllo account ID
+
+  // Work Platform info
+  workPlatformId    String
+  workPlatformName  String
+
+  // Content identifiers
+  externalId        String?  // Platform's content ID
+
+  // Content details
+  title             String?
+  description       String?  @db.Text
+  type              String?  // e.g., POST, VIDEO, STORY, REEL
+  format            String?  // e.g., IMAGE, VIDEO, CAROUSEL
+  url               String?
+  mediaUrl          String?
+  thumbnailUrl      String?
+  visibility        String?  // PUBLIC, PRIVATE, etc.
+
+  // Content metadata
+  duration          Int?     // Video duration in seconds
+
+  // Engagement metrics
+  likeCount         BigInt?
+  dislikeCount      BigInt?
+  commentCount      BigInt?
+  shareCount        BigInt?
+  saveCount         BigInt?
+  viewCount         BigInt?
+  impressionOrganicCount BigInt?
+  reachOrganicCount BigInt?
+  watchTimeInHours  Float?
+
+  // Hashtags and mentions
+  hashtags          Json?    // Array of hashtags
+  mentions          Json?    // Array of mentions
+
+  // Timestamps
+  publishedAt       DateTime?
+
+  // Raw data from Phyllo API
+  rawData           Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account           PhylloAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  comments          PhylloContentComment[]
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([workPlatformId])
+  @@index([publishedAt])
+  @@index([type])
+}
+
+// Phyllo Content Group - Playlists, collections, albums
+// Webhook events: CONTENT-GROUPS.ADDED, CONTENT-GROUPS.UPDATED
+model PhylloContentGroup {
+  id                String   @id // Phyllo content group ID
+  userId            String
+  accountId         String   // Phyllo account ID
+
+  // Work Platform info
+  workPlatformId    String
+  workPlatformName  String
+
+  // Content group identifiers
+  externalId        String?
+
+  // Content group details
+  title             String?
+  description       String?  @db.Text
+  type              String?  // PLAYLIST, COLLECTION, ALBUM, etc.
+  url               String?
+  thumbnailUrl      String?
+  visibility        String?
+
+  // Metrics
+  contentCount      Int?
+  followerCount     BigInt?
+
+  // Raw data
+  rawData           Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  account           PhylloAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([workPlatformId])
+}
+
+// Phyllo Content Comments
+// Webhook events: CONTENTS_COMMENTS.ADDED, CONTENTS_COMMENTS.UPDATED
+model PhylloContentComment {
+  id                String   @id // Phyllo comment ID
+  contentId         String   // Phyllo content ID
+
+  // Comment details
+  externalId        String?
+  text              String?  @db.Text
+  authorName        String?
+  authorUsername    String?
+  authorProfileUrl  String?
+  authorImageUrl    String?
+
+  // Metrics
+  likeCount         BigInt?
+  replyCount        BigInt?
+
+  // Parent comment (for replies)
+  parentCommentId   String?
+
+  // Timestamps
+  publishedAt       DateTime?
+
+  // Raw data
+  rawData           Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  content           PhylloContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+  @@index([publishedAt])
+}
+
+// Phyllo Transaction - Income transactions
+// Webhook events: TRANSACTIONS.ADDED, TRANSACTIONS.UPDATED
+model PhylloTransaction {
+  id                String   @id // Phyllo transaction ID
+  userId            String
+  accountId         String   // Phyllo account ID
+
+  // Work Platform info
+  workPlatformId    String
+  workPlatformName  String
+
+  // Transaction identifiers
+  externalId        String?
+
+  // Transaction details
+  type              String?  // e.g., AD_REVENUE, SPONSORSHIP, TIP, etc.
+  description       String?  @db.Text
+  status            String?  // PENDING, COMPLETED, FAILED, etc.
+
+  // Amount
+  amount            Decimal? @db.Decimal(20, 8)
+  currency          String?
+
+  // Related content
+  contentId         String?
+  contentTitle      String?
+
+  // Timestamps
+  transactionDate   DateTime?
+
+  // Raw data
+  rawData           Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account           PhylloAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([workPlatformId])
+  @@index([transactionDate])
+  @@index([type])
+}
+
+// Phyllo Payout - Payout records
+// Webhook events: PAYOUTS.ADDED, PAYOUTS.UPDATED
+model PhylloPayout {
+  id                String   @id // Phyllo payout ID
+  userId            String
+  accountId         String   // Phyllo account ID
+
+  // Work Platform info
+  workPlatformId    String
+  workPlatformName  String
+
+  // Payout identifiers
+  externalId        String?
+
+  // Payout details
+  status            String?  // PENDING, COMPLETED, FAILED, etc.
+
+  // Amount
+  amount            Decimal? @db.Decimal(20, 8)
+  currency          String?
+
+  // Payment method
+  paymentMethod     String?
+
+  // Timestamps
+  payoutDate        DateTime?
+  initiatedAt       DateTime?
+  completedAt       DateTime?
+
+  // Raw data
+  rawData           Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account           PhylloAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([workPlatformId])
+  @@index([payoutDate])
+}
+
+// Phyllo Balance - Account balances (e-commerce)
+// Webhook events: BALANCES.ADDED, BALANCES.UPDATED
+model PhylloBalance {
+  id                String   @id // Phyllo balance ID
+  userId            String
+  accountId         String   // Phyllo account ID
+
+  // Work Platform info
+  workPlatformId    String
+  workPlatformName  String
+
+  // Balance details
+  type              String?  // e.g., AVAILABLE, PENDING, RESERVED
+
+  // Amount
+  amount            Decimal? @db.Decimal(20, 8)
+  currency          String?
+
+  // Timestamps
+  asOfDate          DateTime?
+
+  // Raw data
+  rawData           Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account           PhylloAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([workPlatformId])
+}
+
+// Phyllo Webhook Event Log - For tracking all webhook events
+model PhylloWebhookEvent {
+  id                String   @id @default(cuid())
+
+  // Event details from Phyllo
+  phylloEventId     String?  @unique // Phyllo's event ID
+  eventType         String   // e.g., ACCOUNTS.CONNECTED, PROFILES.ADDED, etc.
+  eventName         String?
+
+  // Associated IDs
+  phylloUserId      String?
+  accountId         String?
+  profileId         String?
+  contentId         String?
+  transactionId     String?
+  payoutId          String?
+  balanceId         String?
+
+  // Raw payload
+  payload           Json
+
+  // Processing status
+  status            String   @default("RECEIVED") // RECEIVED, PROCESSING, PROCESSED, FAILED
+  processedAt       DateTime?
+  errorMessage      String?  @db.Text
+
+  // Timestamps
+  receivedAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  @@index([eventType])
+  @@index([phylloUserId])
+  @@index([accountId])
+  @@index([status])
+  @@index([receivedAt])
+}
+
+// Phyllo Profile Audience - Audience demographics data
+// Webhook events: PROFILES_AUDIENCE.ADDED, PROFILES_AUDIENCE.UPDATED
+model PhylloProfileAudience {
+  id                String   @id @default(cuid())
+  profileId         String
+  accountId         String
+
+  // Work Platform info
+  workPlatformId    String
+
+  // Audience demographics (stored as JSON for flexibility)
+  ageDistribution   Json?    // e.g., {"18-24": 25.5, "25-34": 40.2, ...}
+  genderDistribution Json?   // e.g., {"male": 55.0, "female": 42.0, "other": 3.0}
+  countryDistribution Json?  // e.g., {"US": 40.0, "UK": 15.0, ...}
+  cityDistribution  Json?    // e.g., {"New York": 10.0, "Los Angeles": 8.0, ...}
+  languageDistribution Json? // e.g., {"en": 70.0, "es": 15.0, ...}
+
+  // Interests/Topics
+  interests         Json?    // Array of interest categories
+
+  // Brand affinity
+  brandAffinity     Json?    // Brands the audience engages with
+
+  // Raw data
+  rawData           Json?
+
+  // Last synced
+  lastSyncedAt      DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([profileId, workPlatformId])
+  @@index([profileId])
+  @@index([accountId])
 }
