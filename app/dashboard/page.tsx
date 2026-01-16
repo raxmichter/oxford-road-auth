@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getLinkedAccounts } from "@/lib/auth/account-linking"
-import { ConnectedAccountsCard } from "@/components/dashboard/connected-accounts-card"
+import { PhylloAccountsCard } from "@/components/dashboard/phyllo-accounts-card"
+import { PhylloContentCard } from "@/components/dashboard/phyllo-content-card"
+import { SignOutButton } from "@/components/sign-out-button"
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -10,8 +11,6 @@ export default async function DashboardPage() {
   if (!session?.user) {
     redirect("/?callbackUrl=/dashboard")
   }
-
-  const accounts = await getLinkedAccounts(session.user.id)
 
   return (
     <main className="min-h-screen bg-zinc-950 p-6">
@@ -31,41 +30,13 @@ export default async function DashboardPage() {
                 className="w-10 h-10 rounded-full"
               />
             )}
+            <SignOutButton />
           </div>
         </div>
 
-        <ConnectedAccountsCard accounts={accounts} />
+        <PhylloAccountsCard />
 
-        {accounts.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-white/50 text-lg">
-              No accounts connected yet. Use the button above to connect your first account!
-            </p>
-          </div>
-        )}
-
-        {accounts.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-              <h3 className="text-white/70 text-sm font-medium mb-2">Total Accounts</h3>
-              <p className="text-4xl font-bold text-white">{accounts.length}</p>
-            </div>
-            <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-              <h3 className="text-white/70 text-sm font-medium mb-2">Total Posts</h3>
-              <p className="text-4xl font-bold text-white">
-                {accounts.reduce((sum, acc) => sum + acc._count.posts, 0)}
-              </p>
-            </div>
-            <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-              <h3 className="text-white/70 text-sm font-medium mb-2">Last Synced</h3>
-              <p className="text-lg font-medium text-white">
-                {accounts.some(acc => acc.lastSyncedAt)
-                  ? "Recently"
-                  : "Not yet"}
-              </p>
-            </div>
-          </div>
-        )}
+        <PhylloContentCard />
       </div>
     </main>
   )

@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import { SocialLoginButtons } from "@/components/social-login-buttons"
+import { PhylloLoginPage } from "@/components/phyllo-login-page"
 
 export default function LoginPage() {
   return (
@@ -16,7 +16,7 @@ export default function LoginPage() {
         </div>
 
         <Suspense fallback={<div className="text-white">Loading...</div>}>
-          <SocialLoginButtons />
+          <PhylloLoginPage />
         </Suspense>
       </div>
     </main>
