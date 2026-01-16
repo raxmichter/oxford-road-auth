@@ -3,51 +3,51 @@ import { cookies } from "next/headers"
 import { prisma } from "@/lib/prisma"
 import { phylloClient } from "@/lib/phyllo/client"
 
-// Sync all Phyllo data for a user to the database
+// Sync all data for a user to the database
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies()
     const guestId = cookieStore.get("phyllo_guest_id")?.value
 
     if (!guestId) {
-      return NextResponse.json({ error: "No Phyllo session found" }, { status: 401 })
+      return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    // Get Phyllo user
-    let phylloUser
+    // Get external user
+    let externalUser
     try {
-      phylloUser = await phylloClient.getUserByExternalId(guestId)
+      externalUser = await phylloClient.getUserByExternalId(guestId)
     } catch {
-      return NextResponse.json({ error: "Phyllo user not found" }, { status: 404 })
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
     // Find or create our user record
     let user = await prisma.user.findFirst({
-      where: { phylloUserId: phylloUser.id },
+      where: { externalUserId: externalUser.id },
     })
 
     if (!user) {
       // Create a guest user record
       user = await prisma.user.create({
         data: {
-          phylloUserId: phylloUser.id,
-          phylloExternalId: guestId,
-          name: phylloUser.name || "Guest User",
+          externalUserId: externalUser.id,
+          externalId: guestId,
+          name: externalUser.name || "Guest User",
         },
       })
     }
 
     // Sync accounts
-    const accountsResponse = await phylloClient.getAccounts(phylloUser.id)
+    const accountsResponse = await phylloClient.getAccounts(externalUser.id)
     const syncedAccounts = []
 
     for (const account of accountsResponse.data) {
-      const syncedAccount = await prisma.phylloAccount.upsert({
+      const syncedAccount = await prisma.connectedAccount.upsert({
         where: { id: account.id },
         create: {
           id: account.id,
           userId: user.id,
-          phylloUserId: phylloUser.id,
+          externalUserId: externalUser.id,
           workPlatformId: account.work_platform.id,
           workPlatformName: account.work_platform.name,
           workPlatformLogoUrl: account.work_platform.logo_url,
@@ -75,11 +75,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Sync profiles
-    const profilesResponse = await phylloClient.getProfiles(undefined, phylloUser.id)
+    const profilesResponse = await phylloClient.getProfiles(undefined, externalUser.id)
     const syncedProfiles = []
 
     for (const profile of profilesResponse.data) {
-      const syncedProfile = await prisma.phylloProfile.upsert({
+      const syncedProfile = await prisma.creatorProfile.upsert({
         where: { id: profile.id },
         create: {
           id: profile.id,
@@ -117,11 +117,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Sync contents (posts)
-    const contentsResponse = await phylloClient.getContents(undefined, phylloUser.id)
+    const contentsResponse = await phylloClient.getContents(undefined, externalUser.id)
     const syncedContents = []
 
     for (const content of contentsResponse.data) {
-      const syncedContent = await prisma.phylloContent.upsert({
+      const syncedContent = await prisma.content.upsert({
         where: { id: content.id },
         create: {
           id: content.id,
@@ -213,14 +213,14 @@ export async function GET(request: NextRequest) {
     const guestId = cookieStore.get("phyllo_guest_id")?.value
 
     if (!guestId) {
-      return NextResponse.json({ error: "No Phyllo session found" }, { status: 401 })
+      return NextResponse.json({ error: "No session found" }, { status: 401 })
     }
 
-    // Find user by phyllo external ID
+    // Find user by external ID
     const user = await prisma.user.findFirst({
-      where: { phylloExternalId: guestId },
+      where: { externalId: guestId },
       include: {
-        phylloAccounts: {
+        connectedAccounts: {
           include: {
             profiles: true,
             contents: {
@@ -255,7 +255,7 @@ export async function GET(request: NextRequest) {
       return data
     }
 
-    const accounts = user.phylloAccounts.map((account) => ({
+    const accounts = user.connectedAccounts.map((account) => ({
       ...account,
       profiles: account.profiles,
       contents: account.contents,
@@ -265,11 +265,11 @@ export async function GET(request: NextRequest) {
       user: {
         id: user.id,
         name: user.name,
-        phylloUserId: user.phylloUserId,
+        externalUserId: user.externalUserId,
       },
       accounts,
-      totalProfiles: user.phylloAccounts.reduce((sum, a) => sum + a.profiles.length, 0),
-      totalContents: user.phylloAccounts.reduce((sum, a) => sum + a.contents.length, 0),
+      totalProfiles: user.connectedAccounts.reduce((sum, a) => sum + a.profiles.length, 0),
+      totalContents: user.connectedAccounts.reduce((sum, a) => sum + a.contents.length, 0),
     }))
   } catch (error) {
     console.error("Fetch error:", error)

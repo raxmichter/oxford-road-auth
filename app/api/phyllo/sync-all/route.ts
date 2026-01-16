@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { phylloClient } from "@/lib/phyllo/client"
 
-// Manual sync endpoint - syncs ALL Phyllo users/accounts to database
+// Manual sync endpoint - syncs ALL users/accounts to database
 // This is for debugging - call it once to populate the database
 export async function POST() {
   try {
@@ -14,32 +14,32 @@ export async function POST() {
       errors: [] as string[],
     }
 
-    // Get all Phyllo users
+    // Get all accounts
     const usersResponse = await phylloClient.getAccounts()
-    console.log(`Found ${usersResponse.data.length} accounts in Phyllo`)
+    console.log(`Found ${usersResponse.data.length} accounts`)
 
     for (const account of usersResponse.data) {
       try {
         // Create or update user
         const user = await prisma.user.upsert({
-          where: { phylloUserId: account.user.id },
+          where: { externalUserId: account.user.id },
           create: {
-            phylloUserId: account.user.id,
-            name: account.user.name || "Phyllo User",
+            externalUserId: account.user.id,
+            name: account.user.name || "User",
           },
           update: {
-            name: account.user.name || "Phyllo User",
+            name: account.user.name || "User",
           },
         })
         results.users.push(user.id)
 
         // Sync account
-        await prisma.phylloAccount.upsert({
+        await prisma.connectedAccount.upsert({
           where: { id: account.id },
           create: {
             id: account.id,
             userId: user.id,
-            phylloUserId: account.user.id,
+            externalUserId: account.user.id,
             workPlatformId: account.work_platform.id,
             workPlatformName: account.work_platform.name,
             workPlatformLogoUrl: account.work_platform.logo_url,
@@ -68,7 +68,7 @@ export async function POST() {
         // Sync profiles for this account
         const profilesResponse = await phylloClient.getProfiles(account.id, account.user.id)
         for (const profile of profilesResponse.data) {
-          await prisma.phylloProfile.upsert({
+          await prisma.creatorProfile.upsert({
             where: { id: profile.id },
             create: {
               id: profile.id,
@@ -108,7 +108,7 @@ export async function POST() {
         // Sync contents for this account
         const contentsResponse = await phylloClient.getContents(account.id, account.user.id)
         for (const content of contentsResponse.data) {
-          await prisma.phylloContent.upsert({
+          await prisma.content.upsert({
             where: { id: content.id },
             create: {
               id: content.id,
