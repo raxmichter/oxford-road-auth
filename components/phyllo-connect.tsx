@@ -4,18 +4,22 @@ import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { WORK_PLATFORMS, type WorkPlatformName } from "@/lib/phyllo/constants"
 
-// Phyllo SDK types - config only contains basic settings, callbacks use .on() method
+// Phyllo SDK types - v2 requires callbacks in config
 interface PhylloConfig {
   clientDisplayName: string
   environment: "sandbox" | "staging" | "production"
   userId: string
   token: string
   workPlatformId?: string
+  accountConnected: (accountId: string, workPlatformId: string, userId: string) => void
+  accountDisconnected: (accountId: string, workPlatformId: string, userId: string) => void
+  tokenExpired: (userId: string) => void
+  exit: (reason: string, userId: string) => void
+  connectionFailure: (reason: string, workPlatformId: string, userId: string) => void
 }
 
 interface PhylloConnectInstance {
   open: () => void
-  on: (event: string, callback: (...args: string[]) => void) => void
 }
 
 declare global {
@@ -164,42 +168,35 @@ export function PhylloPlatformButton({
 
       const { token, userId } = data
 
-      // Initialize with only config options (no callbacks in config)
+      // Initialize with callbacks in config (required by Phyllo SDK v2)
       const phylloConnect = window.PhylloConnect.initialize({
         clientDisplayName: process.env.NEXT_PUBLIC_APP_NAME || "Oxford Road",
         environment: (process.env.NEXT_PUBLIC_PHYLLO_ENVIRONMENT || "staging") as "sandbox" | "staging" | "production",
         userId,
         token,
         workPlatformId,
+        accountConnected: (accountId: string, wpId: string, uId: string) => {
+          setIsLoading(false)
+          onAccountConnected?.(accountId, wpId, uId)
+        },
+        accountDisconnected: (accountId: string, wpId: string, uId: string) => {
+          onAccountDisconnected?.(accountId, wpId, uId)
+        },
+        tokenExpired: (uId: string) => {
+          setIsLoading(false)
+          document.cookie = "phyllo_guest_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+          setError("Session expired. Please click again to retry.")
+        },
+        exit: (reason: string, uId: string) => {
+          setIsLoading(false)
+          onExit?.(reason, uId)
+        },
+        connectionFailure: (reason: string, wpId: string, uId: string) => {
+          setIsLoading(false)
+          setError(reason || "Connection failed. Please try again.")
+        },
       })
 
-      // Register event handlers using .on() method
-      phylloConnect.on("accountConnected", (accountId, wpId, uId) => {
-        setIsLoading(false)
-        onAccountConnected?.(accountId, wpId, uId)
-      })
-
-      phylloConnect.on("accountDisconnected", (accountId, wpId, uId) => {
-        onAccountDisconnected?.(accountId, wpId, uId)
-      })
-
-      phylloConnect.on("tokenExpired", (uId) => {
-        setIsLoading(false)
-        document.cookie = "phyllo_guest_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
-        setError("Session expired. Please click again to retry.")
-      })
-
-      phylloConnect.on("exit", (reason, uId) => {
-        setIsLoading(false)
-        onExit?.(reason, uId)
-      })
-
-      phylloConnect.on("connectionFailure", (reason, wpId, uId) => {
-        setIsLoading(false)
-        setError(reason || "Connection failed. Please try again.")
-      })
-
-      // Open the SDK
       phylloConnect.open()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to connect")
@@ -279,41 +276,34 @@ export function PhylloConnect({
 
       const { token, userId } = data
 
-      // Initialize with only config options
+      // Initialize with callbacks in config (required by Phyllo SDK v2)
       const phylloConnect = window.PhylloConnect.initialize({
         clientDisplayName: process.env.NEXT_PUBLIC_APP_NAME || "Oxford Road",
         environment: (process.env.NEXT_PUBLIC_PHYLLO_ENVIRONMENT || "staging") as "sandbox" | "staging" | "production",
         userId,
         token,
+        accountConnected: (accountId: string, wpId: string, uId: string) => {
+          setIsLoading(false)
+          onAccountConnected?.(accountId, wpId, uId)
+        },
+        accountDisconnected: (accountId: string, wpId: string, uId: string) => {
+          onAccountDisconnected?.(accountId, wpId, uId)
+        },
+        tokenExpired: (uId: string) => {
+          setIsLoading(false)
+          document.cookie = "phyllo_guest_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+          setError("Session expired. Please click again to retry.")
+        },
+        exit: (reason: string, uId: string) => {
+          setIsLoading(false)
+          onExit?.(reason, uId)
+        },
+        connectionFailure: (reason: string, wpId: string, uId: string) => {
+          setIsLoading(false)
+          setError(reason || "Connection failed. Please try again.")
+        },
       })
 
-      // Register event handlers using .on() method
-      phylloConnect.on("accountConnected", (accountId, wpId, uId) => {
-        setIsLoading(false)
-        onAccountConnected?.(accountId, wpId, uId)
-      })
-
-      phylloConnect.on("accountDisconnected", (accountId, wpId, uId) => {
-        onAccountDisconnected?.(accountId, wpId, uId)
-      })
-
-      phylloConnect.on("tokenExpired", (uId) => {
-        setIsLoading(false)
-        document.cookie = "phyllo_guest_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
-        setError("Session expired. Please click again to retry.")
-      })
-
-      phylloConnect.on("exit", (reason, uId) => {
-        setIsLoading(false)
-        onExit?.(reason, uId)
-      })
-
-      phylloConnect.on("connectionFailure", (reason, wpId, uId) => {
-        setIsLoading(false)
-        setError(reason || "Connection failed. Please try again.")
-      })
-
-      // Open the SDK
       phylloConnect.open()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to connect")
