@@ -117,14 +117,27 @@ async function processWebhookEvent(payload: PhylloWebhookEvent) {
 async function handleAccountConnected(data: PhylloWebhookEvent["data"]) {
   if (!data.account_id || !data.user_id) return
 
-  // Find user by phylloUserId
-  const user = await prisma.user.findFirst({
+  // Find or create user by phylloUserId
+  let user = await prisma.user.findFirst({
     where: { phylloUserId: data.user_id },
   })
 
   if (!user) {
-    console.log(`No user found for phylloUserId: ${data.user_id}`)
-    return
+    // Get Phyllo user details to create our user record
+    try {
+      const phylloUser = await phylloClient.getUser(data.user_id)
+      user = await prisma.user.create({
+        data: {
+          phylloUserId: data.user_id,
+          phylloExternalId: phylloUser.external_id,
+          name: phylloUser.name || "Phyllo User",
+        },
+      })
+      console.log(`Created user for phylloUserId: ${data.user_id}`)
+    } catch (error) {
+      console.error(`Failed to create user for phylloUserId: ${data.user_id}`, error)
+      return
+    }
   }
 
   // Fetch full account details from Phyllo
@@ -176,11 +189,26 @@ async function handleAccountDisconnected(data: PhylloWebhookEvent["data"]) {
 async function handleProfileUpdate(data: PhylloWebhookEvent["data"]) {
   if (!data.profile_id || !data.user_id || !data.account_id) return
 
-  const user = await prisma.user.findFirst({
+  let user = await prisma.user.findFirst({
     where: { phylloUserId: data.user_id },
   })
 
-  if (!user) return
+  if (!user) {
+    // Create user if not exists
+    try {
+      const phylloUser = await phylloClient.getUser(data.user_id)
+      user = await prisma.user.create({
+        data: {
+          phylloUserId: data.user_id,
+          phylloExternalId: phylloUser.external_id,
+          name: phylloUser.name || "Phyllo User",
+        },
+      })
+    } catch (error) {
+      console.error(`Failed to create user for profile update: ${data.user_id}`, error)
+      return
+    }
+  }
 
   // Fetch profile from Phyllo
   const profile = await phylloClient.getProfile(data.profile_id)
@@ -225,11 +253,26 @@ async function handleContentsUpdate(data: PhylloWebhookEvent["data"]) {
   const contentIds = data.content_ids || (data.content_id ? [data.content_id] : [])
   if (contentIds.length === 0 || !data.user_id || !data.account_id) return
 
-  const user = await prisma.user.findFirst({
+  let user = await prisma.user.findFirst({
     where: { phylloUserId: data.user_id },
   })
 
-  if (!user) return
+  if (!user) {
+    // Create user if not exists
+    try {
+      const phylloUser = await phylloClient.getUser(data.user_id)
+      user = await prisma.user.create({
+        data: {
+          phylloUserId: data.user_id,
+          phylloExternalId: phylloUser.external_id,
+          name: phylloUser.name || "Phyllo User",
+        },
+      })
+    } catch (error) {
+      console.error(`Failed to create user for contents update: ${data.user_id}`, error)
+      return
+    }
+  }
 
   // Fetch each content item and store it
   for (const contentId of contentIds) {
